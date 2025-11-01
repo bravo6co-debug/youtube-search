@@ -496,25 +496,10 @@
 
     <script>
         const API_BASE_URL = 'https://www.googleapis.com/youtube/v3';
-        const API_KEY_STORAGE_KEY = 'youtube_api_key';
-        
-        let apiKey = '';
+
         let currentSearchResults = [];
         let channelStatsCache = {};
         let videoDetailsCache = {};
-
-        // 로컬 스토리지에서 API 키 불러오기
-        function loadApiKeyFromStorage() {
-            const savedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
-            if (savedKey) {
-                apiKey = savedKey;
-            }
-        }
-
-        // 페이지 로드 시 API 키 초기화
-        window.addEventListener('DOMContentLoaded', () => {
-            loadApiKeyFromStorage();
-        });
 
         // 검색 버튼
         document.getElementById('searchBtn').addEventListener('click', performSearch);
@@ -589,14 +574,9 @@
             });
         });
 
-        // 검색 수행
+        // 검색 수행 - Vercel Serverless Function 사용
         async function performSearch() {
             const query = document.getElementById('searchInput').value.trim();
-            
-            if (!apiKey) {
-                showError('API 키가 설정되지 않았습니다.<br>브라우저 개발자 도구 콘솔에서 다음 명령어로 설정하세요:<br><code>localStorage.setItem("youtube_api_key", "YOUR_API_KEY")</code>');
-                return;
-            }
 
             if (!query) {
                 showError('검색어를 입력해주세요.');
@@ -607,90 +587,61 @@
             hideError();
 
             try {
-                // 채널 검색 (API 할당량 절약을 위해 결과 수 제한)
-                const searchResponse = await fetch(
-                    `${API_BASE_URL}/search?part=snippet&type=channel&q=${encodeURIComponent(query)}&maxResults=20&key=${apiKey}`
-                );
+                // Vercel Serverless Function을 통해 채널 검색
+                const searchResponse = await fetch(`/api/search?q=${encodeURIComponent(query)}&maxResults=50`);
 
                 if (!searchResponse.ok) {
-                    let errorData;
-                    try {
-                        errorData = await searchResponse.json();
-                    } catch (e) {
-                        errorData = { error: { message: '알 수 없는 오류가 발생했습니다.' } };
+                    const errorData = await searchResponse.json();
+                    let errorMessage = errorData.error || '검색에 실패했습니다.';
+
+                    if (errorData.details) {
+                        errorMessage += '<br><small>' + errorData.details + '</small>';
                     }
-                    
-                    let errorMessage = errorData.error?.message || '검색에 실패했습니다.';
-                    
-                    // 할당량 초과 에러 처리
-                    if (searchResponse.status === 403) {
-                        if (errorMessage.includes('quota') || errorMessage.includes('exceeded')) {
-                            errorMessage = '❌ API 할당량을 초과했습니다.\n\n해결 방법:\n1. 잠시 후 다시 시도하세요 (할당량은 자정에 리셋됩니다)\n2. Google Cloud Console에서 할당량을 확인하세요\n3. 검색 결과 수를 줄이거나 필터 사용을 최소화하세요\n\n(무료 할당량: 일일 10,000 단위)';
-                        } else if (errorMessage.includes('key') || errorMessage.includes('permission')) {
-                            errorMessage = '❌ API 키 오류: API 키가 유효하지 않거나 YouTube Data API v3가 활성화되지 않았습니다.\n\n해결 방법:\n1. Google Cloud Console에서 API 키 확인\n2. YouTube Data API v3가 활성화되었는지 확인';
-                        } else {
-                            errorMessage = `❌ API 오류 (403): ${errorMessage}\n\nAPI 키와 할당량을 확인하세요.`;
-                        }
-                    }
-                    
+
                     throw new Error(errorMessage);
                 }
 
-                const searchData = await searchResponse.json();
-                const channelIds = searchData.items.map(item => item.id.channelId);
+                const { channels, totalResults } = await searchResponse.json();
 
-                if (channelIds.length === 0) {
+                if (!channels || channels.length === 0) {
                     showError('검색 결과가 없습니다.');
                     document.getElementById('results').innerHTML = '';
                     document.getElementById('resultsCount').textContent = '검색 결과: 0개';
                     return;
                 }
 
-                // 채널 통계 가져오기
-                const channelsResponse = await fetch(
-                    `${API_BASE_URL}/channels?part=snippet,statistics&id=${channelIds.join(',')}&key=${apiKey}`
-                );
-
-                if (!channelsResponse.ok) {
-                    let errorData;
-                    try {
-                        errorData = await channelsResponse.json();
-                    } catch (e) {
-                        errorData = { error: { message: '알 수 없는 오류' } };
-                    }
-                    
-                    if (channelsResponse.status === 403) {
-                        if (errorData.error?.message?.includes('quota') || errorData.error?.message?.includes('exceeded')) {
-                            throw new Error('API 할당량을 초과했습니다. 잠시 후 다시 시도하세요.');
+                // 서버에서 받은 채널 데이터를 표준 형식으로 변환
+                currentSearchResults = channels.map(ch => ({
+                    id: ch.channelId,
+                    snippet: {
+                        title: ch.title,
+                        description: ch.description,
+                        thumbnails: {
+                            medium: { url: ch.thumbnail },
+                            default: { url: ch.thumbnail }
                         }
-                    }
-                    throw new Error('채널 정보를 가져오는데 실패했습니다.');
-                }
-
-                const channelsData = await channelsResponse.json();
-
-                // 동영상 정보는 필터가 필요할 때만 가져오기 (API 할당량 절약)
-                // 우선 기본 채널 정보만 표시
-                currentSearchResults = channelsData.items.map(channel => ({
-                    ...channel,
-                    recentVideos: null // 필요시에만 로드
+                    },
+                    statistics: {
+                        subscriberCount: ch.subscriberCount,
+                        viewCount: ch.viewCount,
+                        videoCount: ch.videoCount
+                    },
+                    recentVideos: null
                 }));
-                
+
                 // 영상 길이 또는 업로드 기간 필터가 활성화되어 있으면 동영상 정보 가져오기
                 const videoLength = document.querySelector('input[name="videoLength"]:checked').value;
                 const uploadPeriod = document.querySelector('input[name="uploadPeriod"]:checked').value;
-                
+
                 if (videoLength !== 'all' || uploadPeriod !== 'all') {
-                    // 필터가 활성화되어 있으면 동영상 정보 가져오기
                     const channelsWithVideos = await loadVideosForChannels(channelsData.items);
                     currentSearchResults = channelsWithVideos;
                 }
-                
+
                 await applyFilters();
 
             } catch (error) {
                 let errorMsg = error.message;
-                // 줄바꿈이 포함된 에러 메시지 처리
                 if (errorMsg.includes('\n')) {
                     errorMsg = errorMsg.split('\n').join('<br>');
                 }

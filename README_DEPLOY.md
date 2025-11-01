@@ -64,32 +64,52 @@
 3. **자동 배포**
    - 이후 Git에 푸시할 때마다 자동으로 재배포됩니다.
 
-## ⚙️ 환경 변수 설정 (참고사항)
+## ⚙️ 환경 변수 설정 (필수)
 
-현재 이 애플리케이션은 **정적 HTML 파일**로 구성되어 있어, 서버 사이드 환경 변수를 직접 사용할 수 없습니다.
+이 애플리케이션은 **Vercel Serverless Functions**를 사용하여 YouTube API 키를 서버에서 안전하게 관리합니다.
 
-API 키는 **브라우저의 로컬 스토리지**에서 관리되며, 각 사용자가 자신의 브라우저에서 직접 설정해야 합니다.
+### Vercel에서 환경 변수 설정하기
 
-> **참고**: 만약 환경 변수를 사용하고 싶다면, 빌드 프로세스를 추가하여 빌드 타임에 환경 변수를 주입해야 합니다. (Next.js, Vite 등의 프레임워크 사용 필요)
+1. **Vercel 대시보드 접속**
+   - [vercel.com/dashboard](https://vercel.com/dashboard)
+   - 배포된 프로젝트 선택
 
-## 🔒 API 키 설정
+2. **환경 변수 추가**
+   - Settings → Environment Variables 메뉴로 이동
+   - 다음 변수 추가:
+     - **Key**: `YOUTUBE_API_KEY`
+     - **Value**: 실제 YouTube Data API v3 키
+     - **Environment**: Production, Preview, Development 모두 선택
+   - "Save" 클릭
 
-배포 후 API 키를 설정하려면:
+3. **재배포**
+   - 환경 변수를 추가한 후 프로젝트를 재배포해야 적용됩니다
+   - Deployments 탭 → 최신 배포 → "Redeploy" 클릭
 
-1. 배포된 사이트 접속
-2. 브라우저 개발자 도구(F12) 열기
-3. Console 탭에서 실행:
-   ```javascript
-   localStorage.setItem("youtube_api_key", "YOUR_API_KEY_HERE")
-   ```
-4. 페이지 새로고침
+### YouTube API 키 발급 방법
+
+1. [Google Cloud Console](https://console.cloud.google.com/) 접속
+2. 새 프로젝트 생성 (또는 기존 프로젝트 선택)
+3. "API 및 서비스" → "라이브러리" 메뉴
+4. "YouTube Data API v3" 검색 후 활성화
+5. "API 및 서비스" → "사용자 인증 정보" 메뉴
+6. "사용자 인증 정보 만들기" → "API 키" 선택
+7. 생성된 API 키를 복사하여 Vercel 환경 변수에 등록
+
+## 🔒 보안 참고사항
+
+- ✅ **API 키는 서버에서 관리됩니다** - 브라우저에 노출되지 않음
+- ✅ **Serverless Function을 통한 안전한 API 호출**
+- ⚠️ API 키는 절대 소스 코드에 직접 입력하지 마세요
+- ⚠️ `.env` 파일은 Git에 커밋하지 마세요 (`.gitignore`에 추가)
 
 ## 📝 배포 후 확인사항
 
 - [ ] 사이트가 정상적으로 로드되는지 확인
-- [ ] API 키가 로컬 스토리지에 저장되는지 확인
+- [ ] Vercel 환경 변수에 `YOUTUBE_API_KEY`가 설정되었는지 확인
 - [ ] 검색 기능이 정상 작동하는지 확인
 - [ ] 필터 기능이 정상 작동하는지 확인
+- [ ] Serverless Function이 정상적으로 동작하는지 확인 (`/api/search` 엔드포인트)
 
 ## 🔄 업데이트 배포
 

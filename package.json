@@ -1,0 +1,21 @@
+{
+  "name": "youtube-channel-search",
+  "version": "1.0.0",
+  "description": "유튜브 채널 검색 웹 애플리케이션",
+  "main": "index.html",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "keywords": [
+    "youtube",
+    "channel",
+    "search",
+    "api"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {},
+  "dependencies": {}
+}
+

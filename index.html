@@ -634,7 +634,7 @@
                 const uploadPeriod = document.querySelector('input[name="uploadPeriod"]:checked').value;
 
                 if (videoLength !== 'all' || uploadPeriod !== 'all') {
-                    const channelsWithVideos = await loadVideosForChannels(channelsData.items);
+                    const channelsWithVideos = await loadVideosForChannels(currentSearchResults);
                     currentSearchResults = channelsWithVideos;
                 }
 
@@ -681,16 +681,15 @@
             return channelsWithVideos;
         }
 
-        // 채널의 최근 동영상 가져오기
+        // 채널의 최근 동영상 가져오기 - Vercel Serverless Function 사용
         async function getChannelVideos(channelId) {
             if (videoDetailsCache[channelId]) {
                 return videoDetailsCache[channelId];
             }
 
             try {
-                const response = await fetch(
-                    `${API_BASE_URL}/search?part=snippet&channelId=${channelId}&type=video&order=date&maxResults=5&key=${apiKey}`
-                );
+                // Vercel Serverless Function을 통해 동영상 정보 가져오기
+                const response = await fetch(`/api/videos?channelId=${channelId}&maxResults=5`);
 
                 if (!response.ok) {
                     // 에러가 발생해도 빈 배열 반환 (다른 채널 처리 계속)
@@ -698,23 +697,7 @@
                 }
 
                 const data = await response.json();
-                const videoIds = data.items.map(item => item.id.videoId);
-
-                if (videoIds.length === 0) return [];
-
-                // 동영상 상세 정보 (길이, 업로드 날짜)
-                const videosResponse = await fetch(
-                    `${API_BASE_URL}/videos?part=contentDetails,snippet&id=${videoIds.join(',')}&key=${apiKey}`
-                );
-
-                if (!videosResponse.ok) return [];
-
-                const videosData = await videosResponse.json();
-                const videos = videosData.items.map(video => ({
-                    id: video.id,
-                    duration: video.contentDetails.duration,
-                    publishedAt: video.snippet.publishedAt
-                }));
+                const videos = data.videos || [];
 
                 videoDetailsCache[channelId] = videos;
                 return videos;
